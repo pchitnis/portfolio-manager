@@ -1,0 +1,7 @@
+"use client";
+import { AssetGrid } from "@/components/asset-grid";
+import { assetConfigs } from "@/lib/asset-configs";
+
+export default function PensionPage() {
+  return <AssetGrid config={assetConfigs["pension"]} />;
+}
