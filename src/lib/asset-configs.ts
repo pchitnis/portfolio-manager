@@ -11,6 +11,12 @@ export interface FieldConfig {
   defaultValue?: string | number;
   autoCalc?: string; // formula description
   readOnly?: boolean;
+  autoFetchPrice?: {
+    symbolField: string;
+    quantityField: string;
+    fallbackPriceField: string;
+    apiPath: string;
+  };
 }
 
 export interface AssetTypeConfig {
@@ -75,7 +81,8 @@ export const assetConfigs: Record<string, AssetTypeConfig> = {
       { name: "purchaseDate", label: "Date of Purchase", type: "date", required: false },
       { name: "buyPrice", label: "Buy Price", type: "number", required: true, placeholder: "0.00" },
       { name: "quantity", label: "Quantity", type: "number", required: true, placeholder: "0" },
-      { name: "currentValue", label: "Current Value", type: "number", required: false, placeholder: "Fetched from Yahoo Finance", readOnly: true },
+      { name: "currentValue", label: "Current Value", type: "number", required: false, placeholder: "Fetched from Yahoo Finance", readOnly: true,
+        autoFetchPrice: { symbolField: "symbol", quantityField: "quantity", fallbackPriceField: "buyPrice", apiPath: "/api/stocks/price" } },
       { name: "broker", label: "Broker", type: "text", required: false, placeholder: "Enter broker name" },
     ],
   },
