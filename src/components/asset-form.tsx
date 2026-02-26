@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FieldConfig } from "@/lib/asset-configs";
+import { Info, Loader2 } from "lucide-react";
 
 interface AssetFormProps {
   fields: FieldConfig[];
@@ -16,10 +17,24 @@ interface AssetFormProps {
   title: string;
 }
 
+type PriceStatus = "idle" | "fetching" | "success" | "fallback";
+
 export function AssetForm({ fields, open, onClose, onSubmit, initialData, title }: AssetFormProps) {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [priceStatus, setPriceStatus] = useState<PriceStatus>("idle");
+  const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Find the field with autoFetchPrice config (if any)
+  const autoFetchField = fields.find((f) => f.autoFetchPrice);
+  const symbolFieldName = autoFetchField?.autoFetchPrice?.symbolField ?? "";
+  const quantityFieldName = autoFetchField?.autoFetchPrice?.quantityField ?? "";
+  const fallbackPriceFieldName = autoFetchField?.autoFetchPrice?.fallbackPriceField ?? "";
+
+  // Derived values tracked for the price-fetch effect
+  const symbolValue = symbolFieldName ? String(formData[symbolFieldName] ?? "") : "";
+  const quantityValue = quantityFieldName ? String(formData[quantityFieldName] ?? "") : "";
 
   useEffect(() => {
     if (open) {
@@ -35,8 +50,43 @@ export function AssetForm({ fields, open, onClose, onSubmit, initialData, title 
         setFormData(defaults);
       }
       setError("");
+      setPriceStatus("idle");
     }
   }, [open, initialData, fields]);
+
+  // Auto-fetch live price when symbol or quantity changes
+  useEffect(() => {
+    if (!open || !autoFetchField?.autoFetchPrice) return;
+    if (!symbolValue.trim()) return;
+
+    const { apiPath } = autoFetchField.autoFetchPrice;
+    const qty = parseFloat(quantityValue) || 0;
+    const fallbackPrice = parseFloat(String(formData[fallbackPriceFieldName])) || 0;
+
+    if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
+    setPriceStatus("fetching");
+
+    fetchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${apiPath}?symbol=${encodeURIComponent(symbolValue.trim())}`);
+        if (!res.ok) throw new Error("Price fetch failed");
+
+        const data = await res.json();
+        const value = parseFloat((data.price * qty).toFixed(4));
+        setFormData((prev) => ({ ...prev, [autoFetchField.name]: value }));
+        setPriceStatus("success");
+      } catch {
+        const fallbackValue = parseFloat((fallbackPrice * qty).toFixed(4));
+        setFormData((prev) => ({ ...prev, [autoFetchField.name]: fallbackValue }));
+        setPriceStatus("fallback");
+      }
+    }, 800);
+
+    return () => {
+      if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbolValue, quantityValue, open]);
 
   const handleChange = (name: string, value: any) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -97,14 +147,34 @@ export function AssetForm({ fields, open, onClose, onSubmit, initialData, title 
         )}
         {fields.map((field) => {
           if (!shouldShowField(field)) return null;
-          if (field.readOnly && !initialData) return null;
+          if (field.readOnly && !field.autoFetchPrice && !initialData) return null;
+
+          const isAutoFetch = !!field.autoFetchPrice;
 
           return (
             <div key={field.name} className="space-y-1">
-              <Label htmlFor={field.name}>
-                {field.label}
-                {field.required && !field.readOnly && <span className="text-red-500 ml-1">*</span>}
-              </Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor={field.name}>
+                  {field.label}
+                  {field.required && !field.readOnly && <span className="text-red-500 ml-1">*</span>}
+                </Label>
+                {isAutoFetch && priceStatus === "fetching" && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                )}
+                {isAutoFetch && priceStatus === "success" && (
+                  <span className="text-xs font-medium text-green-600">● Live</span>
+                )}
+                {isAutoFetch && priceStatus === "fallback" && (
+                  <span
+                    className="flex items-center gap-1 text-xs font-medium text-amber-600 cursor-help"
+                    title="Live price could not be fetched. Showing buy price × quantity."
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                    Estimated
+                  </span>
+                )}
+              </div>
+
               {field.type === "select" ? (
                 <Select
                   id={field.name}
