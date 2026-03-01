@@ -58,6 +58,16 @@ export async function POST(
   }
 
   const userId = (session.user as any).id;
+
+  // Verify user exists in DB (catches stale JWT after DB migrations)
+  const userExists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!userExists) {
+    return NextResponse.json(
+      { error: "Your session has expired. Please sign out and sign in again." },
+      { status: 401 }
+    );
+  }
+
   const body = await request.json();
 
   // Remove empty string values and convert to appropriate types

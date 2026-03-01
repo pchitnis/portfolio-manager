@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -37,35 +37,39 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([token])
+  @@index([userId])
 }
 
 model BankAccount {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   userId         String
   holderName     String
   bankName       String
   accountNumber  String?
   sortCode       String?
-  currency       String  @default("INR")
-  currentBalance Float   @default(0)
+  currency       String   @default("INR")
+  currentBalance Float    @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
+  @@index([userId, currency])
 }
 
 model TermDeposit {
-  id                String  @id @default(cuid())
+  id                String   @id @default(cuid())
   userId            String
   holderName        String
   institution       String
-  investmentType    String  @default("Fixed deposit")
+  investmentType    String   @default("Fixed deposit")
   customType        String?
   accountNumber     String?
-  currency          String  @default("INR")
-  amount            Float   @default(0)
+  currency          String   @default("INR")
+  amount            Float    @default(0)
   annualRate        Float?
   interestFrequency String?
   startDate         String?
@@ -76,16 +80,19 @@ model TermDeposit {
   updatedAt         DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
+  @@index([userId, maturityDate])
+  @@index([userId, investmentType])
 }
 
 model Stock {
-  id           String  @id @default(cuid())
+  id           String   @id @default(cuid())
   userId       String
   name         String
   symbol       String
   purchaseDate String?
-  currency     String  @default("INR")
+  currency     String   @default("INR")
   buyPrice     Float
   quantity     Float
   currentValue Float?
@@ -94,43 +101,49 @@ model Stock {
   updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
+  @@index([userId, symbol])
 }
 
 model Metal {
-  id           String  @id @default(cuid())
+  id           String   @id @default(cuid())
   userId       String
   metalName    String
   quantity     Float
-  currency     String  @default("INR")
+  currency     String   @default("INR")
   buyingPrice  Float
   currentValue Float?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
+  @@index([userId, metalName])
 }
 
 model RealEstate {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   userId         String
   identifier     String
   propertyType   String?
   address        String?
-  currency       String  @default("INR")
+  currency       String   @default("INR")
   purchasePrice  Float
   currentValue   Float?
-  mortgageAmount Float   @default(0)
+  mortgageAmount Float    @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
+  @@index([userId, propertyType])
 }
 
 model Pension {
-  id            String  @id @default(cuid())
+  id            String   @id @default(cuid())
   userId        String
   holderName    String
   providerName  String
@@ -138,22 +151,23 @@ model Pension {
   address       String?
   accountNumber String?
   contactInfo   String?
-  currency      String  @default("INR")
+  currency      String   @default("INR")
   currentValue  Float
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 
 model Loan {
-  id                 String  @id @default(cuid())
+  id                 String   @id @default(cuid())
   userId             String
   holderName         String?
   institution        String
   loanType           String
-  currency           String  @default("INR")
+  currency           String   @default("INR")
   loanAmount         Float
   tenureYears        Float?
   startDate          String?
@@ -163,19 +177,21 @@ model Loan {
   updatedAt          DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
+  @@index([userId, loanType])
 }
 
 model Insurance {
-  id                 String  @id @default(cuid())
+  id                 String   @id @default(cuid())
   userId             String
   insuredName        String
   provider           String?
   policyType         String?
   policyNumber       String?
-  currency           String  @default("INR")
+  currency           String   @default("INR")
   sumAssured         Float?
-  currentPayoutValue Float   @default(0)
+  currentPayoutValue Float    @default(0)
   documentPath       String?
   premiumAmount      Float?
   paymentFrequency   String?
@@ -190,32 +206,39 @@ model Insurance {
   updatedAt          DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
+  @@index([userId, policyType])
+  @@index([userId, nextDueDate])
 }
 
 model CashFlowEntry {
-  id           String  @id @default(cuid())
+  id           String   @id @default(cuid())
   userId       String
-  type         String // "inflow" or "outflow"
+  type         String   // "inflow" or "outflow"
   category     String
-  categoryType String? // inflow category: Salary, Rental income, etc.
+  categoryType String?  // inflow category: Salary, Rental income, etc.
   fiscalYear   Int
-  apr        Float  @default(0)
-  may        Float  @default(0)
-  jun        Float  @default(0)
-  jul        Float  @default(0)
-  aug        Float  @default(0)
-  sep        Float  @default(0)
-  oct        Float  @default(0)
-  nov        Float  @default(0)
-  dec        Float  @default(0)
-  jan        Float  @default(0)
-  feb        Float  @default(0)
-  mar        Float  @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  apr          Float    @default(0)
+  may          Float    @default(0)
+  jun          Float    @default(0)
+  jul          Float    @default(0)
+  aug          Float    @default(0)
+  sep          Float    @default(0)
+  oct          Float    @default(0)
+  nov          Float    @default(0)
+  dec          Float    @default(0)
+  jan          Float    @default(0)
+  feb          Float    @default(0)
+  mar          Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
+  @@index([userId, fiscalYear])
+  @@index([userId, type])
+  @@index([userId, type, fiscalYear])
   @@unique([userId, type, category, fiscalYear])
 }

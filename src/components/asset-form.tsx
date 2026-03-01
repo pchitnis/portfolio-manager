@@ -85,6 +85,7 @@ export function AssetForm({ fields, open, onClose, onSubmit, initialData, title 
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [priceStatus, setPriceStatus] = useState<PriceStatus>("idle");
   const [calcStatus, setCalcStatus] = useState<"idle" | "calculated">("idle");
   const [fileUploads, setFileUploads] = useState<Record<string, string[]>>({});
@@ -136,6 +137,7 @@ export function AssetForm({ fields, open, onClose, onSubmit, initialData, title 
       });
       setFileUploads(initFiles);
       setError("");
+      setFieldErrors({});
       setPriceStatus("idle");
       setCalcStatus("idle");
       setDueDateStatus("idle");
@@ -226,7 +228,37 @@ export function AssetForm({ fields, open, onClose, onSubmit, initialData, title 
     open,
   ]);
 
-  const handleChange = (name: string, value: any) => {
+  const handleChange = (name: string, value: any, isBadInput?: boolean) => {
+    // Validate number fields: no negative values, max 2 decimal places, no alphabets
+    const field = fields.find((f) => f.name === name);
+    if (field?.type === "number") {
+      if (isBadInput) {
+        setFieldErrors((prev) => ({ ...prev, [name]: "Please enter positive numbers only. Alphabets are not allowed." }));
+        return; // keep previous valid value
+      }
+      if (value !== "" && value !== null && value !== undefined) {
+        const strVal = String(value);
+        if (parseFloat(strVal) < 0) {
+          setFieldErrors((prev) => ({ ...prev, [name]: "Please enter a positive number." }));
+          value = "0";
+        } else {
+          const dotIdx = strVal.indexOf(".");
+          if (dotIdx !== -1 && strVal.length - dotIdx - 1 > 2) {
+            setFieldErrors((prev) => ({ ...prev, [name]: "Maximum 2 decimal places allowed." }));
+            value = parseFloat(parseFloat(strVal).toFixed(2));
+          } else {
+            setFieldErrors((prev) => { const e = { ...prev }; delete e[name]; return e; });
+          }
+        }
+      } else {
+        setFieldErrors((prev) => { const e = { ...prev }; delete e[name]; return e; });
+      }
+    } else if (field?.type === "text" && typeof value === "string" && value.length >= 256) {
+      setFieldErrors((prev) => ({ ...prev, [name]: "Maximum 256 characters allowed." }));
+    } else {
+      setFieldErrors((prev) => { const e = { ...prev }; delete e[name]; return e; });
+    }
+
     // When Quarter 1 month changes, auto-populate Q2/Q3/Q4 (+3 months each)
     if (nextDueConfig && name === nextDueConfig.qMonth1Field) {
       const q1Idx = MONTHS.indexOf(value);
@@ -478,13 +510,19 @@ export function AssetForm({ fields, open, onClose, onSubmit, initialData, title 
                 <Input
                   id={field.name}
                   type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-                  step={field.type === "number" ? "any" : undefined}
+                  step={field.type === "number" ? "0.01" : undefined}
+                  min={field.type === "number" ? "0" : undefined}
+                  maxLength={field.type === "text" ? 256 : undefined}
                   placeholder={field.placeholder}
                   value={formData[field.name] ?? ""}
-                  onChange={(e) => handleChange(field.name, e.target.value)}
+                  onChange={(e) => handleChange(field.name, e.target.value, (e.target as HTMLInputElement).validity?.badInput)}
                   readOnly={field.readOnly}
                   disabled={field.readOnly}
+                  className={fieldErrors[field.name] ? "border-red-500 focus-visible:ring-red-500" : ""}
                 />
+              )}
+              {fieldErrors[field.name] && (
+                <p className="text-xs text-red-500 mt-1">{fieldErrors[field.name]}</p>
               )}
             </div>
           );

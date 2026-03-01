@@ -9,7 +9,13 @@
       "Bash(npx prisma generate:*)",
       "Bash(npx prisma migrate deploy:*)",
       "Bash(npm run dev:*)",
-      "Bash(npx prisma migrate dev --name add-password-reset-token)"
+      "Bash(npx prisma migrate dev --name add-password-reset-token)",
+      "Bash(npx kill-port 3000 3001)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(npx prisma migrate dev --name add_currency_to_assets --skip-generate)",
+      "Bash(npx prisma migrate dev --name add_loan_holder_name)",
+      "Bash(curl -s http://localhost:3000 -o /dev/null -w \"%{http_code}\")",
+      "Bash(npx prisma migrate dev --name add_insurance_premium_schedule)"
     ]
   }
 }

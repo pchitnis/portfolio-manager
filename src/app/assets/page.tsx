@@ -17,14 +17,14 @@ import {
 } from "lucide-react";
 
 const assetTypes = [
-  { key: "stocks", label: "Stocks & Funds", icon: TrendingUp, color: "text-green-600 bg-green-50" },
-  { key: "term-deposits", label: "Term Deposits", icon: Landmark, color: "text-blue-600 bg-blue-50" },
   { key: "bank-accounts", label: "Bank Accounts", icon: Building2, color: "text-indigo-600 bg-indigo-50" },
-  { key: "real-estate", label: "Real Estate", icon: Home, color: "text-amber-600 bg-amber-50" },
+  { key: "term-deposits", label: "Term Deposits", icon: Landmark, color: "text-blue-600 bg-blue-50" },
+  { key: "stocks", label: "Stocks & Funds", icon: TrendingUp, color: "text-green-600 bg-green-50" },
   { key: "metals", label: "Metal", icon: CircleDollarSign, color: "text-yellow-600 bg-yellow-50" },
+  { key: "real-estate", label: "Real Estate", icon: Home, color: "text-amber-600 bg-amber-50" },
+  { key: "pension", label: "Pension", icon: Briefcase, color: "text-teal-600 bg-teal-50" },
   { key: "loans", label: "Loans", icon: CreditCard, color: "text-red-600 bg-red-50" },
   { key: "insurance", label: "Life Insurance", icon: Shield, color: "text-purple-600 bg-purple-50" },
-  { key: "pension", label: "Pension", icon: Briefcase, color: "text-teal-600 bg-teal-50" },
 ];
 
 export default function AssetsPage() {
