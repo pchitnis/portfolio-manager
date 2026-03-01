@@ -13,6 +13,7 @@ import {
   Briefcase,
   CreditCard,
   Shield,
+  ArrowLeft,
 } from "lucide-react";
 
 const assetTypes = [
@@ -44,7 +45,12 @@ export default function AssetsPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <h1 className="text-3xl font-bold text-center mb-2">Add My Assets</h1>
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => router.back()} className="p-1 rounded hover:bg-muted transition-colors">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <h1 className="text-3xl font-bold">Add My Assets</h1>
+        </div>
         <p className="text-center text-muted-foreground mb-8">Select an asset category to manage</p>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {assetTypes.map((type) => {

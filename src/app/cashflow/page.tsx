@@ -5,13 +5,41 @@ import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { Select } from "@/components/ui/select";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
+import { Plus, Save, Trash2, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
+import {
+  PieChart, Pie, Cell, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer, Line, ComposedChart,
+} from "recharts";
 
 const months = ["apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec", "jan", "feb", "mar"];
 const monthLabels = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
+
+const INFLOW_CATEGORY_OPTIONS = [
+  "Salary",
+  "Rental income",
+  "Return on investment",
+  "Maturity of investment",
+  "Other income",
+];
+
+const OUTFLOW_CATEGORY_OPTIONS = [
+  "Home loan",
+  "Rent",
+  "Loan repayment",
+  "Bills",
+  "Education",
+  "Shopping",
+  "Food and other essential",
+  "Medical",
+  "Insurance",
+  "Other",
+];
 
 const defaultInflowCategories = [
   "Person 1 income",
@@ -54,6 +82,7 @@ const defaultOutflowCategories = [
 interface CashFlowRow {
   type: "inflow" | "outflow";
   category: string;
+  categoryType?: string;
   [key: string]: any;
 }
 
@@ -66,10 +95,11 @@ export default function CashFlowPage() {
   const [outflowRows, setOutflowRows] = useState<CashFlowRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [statementOpen, setStatementOpen] = useState(false);
 
   const initializeDefaults = useCallback(() => {
     const makeRow = (type: "inflow" | "outflow", category: string): CashFlowRow => {
-      const row: CashFlowRow = { type, category };
+      const row: CashFlowRow = { type, category, categoryType: "" };
       months.forEach((m) => (row[m] = 0));
       return row;
     };
@@ -88,7 +118,6 @@ export default function CashFlowPage() {
           const inflows = entries.filter((e: any) => e.type === "inflow");
           const outflows = entries.filter((e: any) => e.type === "outflow");
 
-          // Merge with defaults
           const inflowCats = new Set(inflows.map((e: any) => e.category));
           const outflowCats = new Set(outflows.map((e: any) => e.category));
 
@@ -139,7 +168,7 @@ export default function CashFlowPage() {
   };
 
   const addRow = (type: "inflow" | "outflow") => {
-    const row: CashFlowRow = { type, category: `New ${type} item` };
+    const row: CashFlowRow = { type, category: `New ${type} item`, categoryType: "" };
     months.forEach((m) => (row[m] = 0));
     if (type === "inflow") {
       setInflowRows((prev) => [...prev, row]);
@@ -181,6 +210,7 @@ export default function CashFlowPage() {
       const allEntries = [...inflowRows, ...outflowRows].map((row) => ({
         type: row.type,
         category: row.category,
+        categoryType: row.categoryType || null,
         apr: row.apr || 0,
         may: row.may || 0,
         jun: row.jun || 0,
@@ -213,8 +243,6 @@ export default function CashFlowPage() {
     }
   };
 
-  const formatNum = (n: number) => (n === 0 ? "" : n.toLocaleString());
-
   if (status === "loading" || loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
@@ -223,8 +251,12 @@ export default function CashFlowPage() {
     title: string,
     rows: CashFlowRow[],
     setRows: React.Dispatch<React.SetStateAction<CashFlowRow[]>>,
-    type: "inflow" | "outflow"
-  ) => (
+    type: "inflow" | "outflow",
+    categoryOptions: string[] = [],
+    emptyLabel = "-- Select --"
+  ) => {
+    const showCategory = categoryOptions.length > 0;
+    return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold">{title}</h2>
@@ -234,15 +266,23 @@ export default function CashFlowPage() {
         </Button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
+        <table className="w-full text-sm border-collapse table-fixed">
+          <colgroup>
+            <col className="w-[150px]" />
+            {showCategory && <col className="w-[160px]" />}
+            {months.map((m) => <col key={m} className="w-[72px]" />)}
+            <col className="w-[80px]" />
+            <col className="w-[36px]" />
+          </colgroup>
           <thead>
             <tr className="bg-muted/50">
-              <th className="border p-2 text-left min-w-[180px] sticky left-0 bg-muted/50">Particulars</th>
+              <th className="border p-2 text-left sticky left-0 bg-muted/50">Particulars</th>
+              {showCategory && <th className="border p-2 text-left">Category</th>}
               {monthLabels.map((m) => (
-                <th key={m} className="border p-2 text-right min-w-[90px]">{m}</th>
+                <th key={m} className="border p-2 text-center">{m}</th>
               ))}
-              <th className="border p-2 text-right min-w-[100px] font-bold">Total</th>
-              <th className="border p-2 w-10"></th>
+              <th className="border p-2 text-center font-bold">Total</th>
+              <th className="border p-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -256,6 +296,24 @@ export default function CashFlowPage() {
                     className="w-full px-1 py-0.5 text-sm border-0 focus:outline-none focus:ring-1 focus:ring-primary rounded"
                   />
                 </td>
+                {showCategory && (
+                  <td className="border p-1">
+                    <select
+                      value={row.categoryType || ""}
+                      onChange={(e) => {
+                        const updated = [...rows];
+                        updated[idx] = { ...updated[idx], categoryType: e.target.value };
+                        setRows(updated);
+                      }}
+                      className="w-full px-1 py-0.5 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-primary bg-white"
+                    >
+                      <option value="">{emptyLabel}</option>
+                      {categoryOptions.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </td>
+                )}
                 {months.map((m) => (
                   <td key={m} className="border p-1">
                     <input
@@ -267,7 +325,7 @@ export default function CashFlowPage() {
                     />
                   </td>
                 ))}
-                <td className="border p-2 text-right font-medium bg-muted/30">
+                <td className="border p-2 text-right font-medium bg-muted/30 text-xs">
                   {getRowTotal(row).toLocaleString()}
                 </td>
                 <td className="border p-1 text-center">
@@ -281,15 +339,15 @@ export default function CashFlowPage() {
                 </td>
               </tr>
             ))}
-            {/* Totals row */}
             <tr className="bg-muted/50 font-bold">
               <td className="border p-2 sticky left-0 bg-muted/50">Total {title}</td>
+              {showCategory && <td className="border p-2"></td>}
               {months.map((m) => (
-                <td key={m} className="border p-2 text-right">
+                <td key={m} className="border p-2 text-center">
                   {getColumnTotal(rows, m).toLocaleString()}
                 </td>
               ))}
-              <td className="border p-2 text-right">
+              <td className="border p-2 text-center">
                 {rows.reduce((sum, row) => sum + getRowTotal(row), 0).toLocaleString()}
               </td>
               <td className="border p-1"></td>
@@ -298,61 +356,253 @@ export default function CashFlowPage() {
         </table>
       </div>
     </div>
-  );
+    );
+  };
 
-  // Net cash flow row
   const netCashFlow = months.map((m) => getColumnTotal(inflowRows, m) - getColumnTotal(outflowRows, m));
+
+  // Chart data derived from rows
+  const cashflowChartData = monthLabels.map((label, idx) => {
+    const inflow = getColumnTotal(inflowRows, months[idx]);
+    const outflow = getColumnTotal(outflowRows, months[idx]);
+    return { month: label, Inflow: inflow, Outflow: outflow, "Net Cash Flow": inflow - outflow };
+  });
+  const hasCashflowData = cashflowChartData.some((d) => d.Inflow > 0 || d.Outflow > 0);
+
+  const spendingData = (() => {
+    const grouped: Record<string, number> = {};
+    outflowRows.forEach((row) => {
+      const key = row.categoryType || "Other";
+      const value = months.reduce((sum, m) => sum + (parseFloat(row[m]) || 0), 0);
+      grouped[key] = (grouped[key] || 0) + value;
+    });
+    return Object.entries(grouped)
+      .map(([name, value]) => ({ name, value }))
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value);
+  })();
+
+  const incomeData = (() => {
+    const grouped: Record<string, number> = {};
+    inflowRows.forEach((row) => {
+      const key = row.categoryType || "Other income";
+      const value = months.reduce((sum, m) => sum + (parseFloat(row[m]) || 0), 0);
+      grouped[key] = (grouped[key] || 0) + value;
+    });
+    return Object.entries(grouped)
+      .map(([name, value]) => ({ name, value }))
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value);
+  })();
+
+  const pieLegendFormatter = (value: string, entry: any) => {
+    const pct = entry?.payload?.percent;
+    return (
+      <span style={{ fontSize: 10 }}>
+        {value}{pct != null ? ` ${(pct * 100).toFixed(0)}%` : ""}
+      </span>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <main className="mx-auto max-w-[1400px] px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Cash Flow Statement</h1>
-          <div className="flex items-center gap-3">
-            <Select
-              value={String(fiscalYear)}
-              onChange={(e) => setFiscalYear(parseInt(e.target.value))}
-              className="w-32"
-            >
-              {[2024, 2025, 2026, 2027].map((y) => (
-                <option key={y} value={y}>FY {y}</option>
-              ))}
-            </Select>
-            <Button onClick={handleSave} disabled={saving}>
-              <Save className="h-4 w-4 mr-2" />
-              {saving ? "Saving..." : "Save"}
-            </Button>
-          </div>
+
+        {/* Header + Collapsible Statement */}
+        <div className="mb-6">
+          {/* Clickable header bar */}
+          <button
+            className="w-full flex items-center justify-between bg-white border rounded-xl px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/40 transition-all group"
+            onClick={() => setStatementOpen((v) => !v)}
+          >
+            <div className="flex items-center gap-3">
+              <button
+                onClick={(e) => { e.stopPropagation(); router.back(); }}
+                className="p-1 rounded hover:bg-muted transition-colors"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <h1 className="text-2xl font-bold group-hover:text-primary transition-colors">
+                Cash Flow Statement
+              </h1>
+              <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                FY {fiscalYear}
+              </span>
+              {!statementOpen && (
+                <span className="text-xs text-muted-foreground italic">Click to expand</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+              <Select
+                value={String(fiscalYear)}
+                onChange={(e) => setFiscalYear(parseInt(e.target.value))}
+                className="w-32"
+              >
+                {[2024, 2025, 2026, 2027].map((y) => (
+                  <option key={y} value={y}>FY {y}</option>
+                ))}
+              </Select>
+              <Button onClick={handleSave} disabled={saving}>
+                <Save className="h-4 w-4 mr-2" />
+                {saving ? "Saving..." : "Save"}
+              </Button>
+              {statementOpen
+                ? <ChevronUp className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                : <ChevronDown className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              }
+            </div>
+          </button>
+
+          {/* Collapsible table body */}
+          {statementOpen && (
+            <Card className="p-4 mt-2 rounded-t-none border-t-0">
+              {renderTable("Inflow", inflowRows, setInflowRows, "inflow", INFLOW_CATEGORY_OPTIONS)}
+              {renderTable("Outflow", outflowRows, setOutflowRows, "outflow", OUTFLOW_CATEGORY_OPTIONS, "Other")}
+
+              {/* Net Cash Flow row */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse table-fixed">
+                  <colgroup>
+                    <col className="w-[150px]" />
+                    <col className="w-[160px]" />
+                    {months.map((m) => <col key={m} className="w-[72px]" />)}
+                    <col className="w-[80px]" />
+                    <col className="w-[36px]" />
+                  </colgroup>
+                  <tbody>
+                    <tr className="bg-blue-50 font-bold text-blue-800">
+                      <td className="border p-2 sticky left-0 bg-blue-50">Net Cashflow</td>
+                      <td className="border p-2"></td>
+                      {netCashFlow.map((val, idx) => (
+                        <td
+                          key={idx}
+                          className={`border p-2 text-center ${val < 0 ? "text-red-600" : "text-green-700"}`}
+                        >
+                          {val.toLocaleString()}
+                        </td>
+                      ))}
+                      <td className={`border p-2 text-center ${netCashFlow.reduce((a, b) => a + b, 0) < 0 ? "text-red-600" : "text-green-700"}`}>
+                        {netCashFlow.reduce((a, b) => a + b, 0).toLocaleString()}
+                      </td>
+                      <td className="border p-1"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
         </div>
 
-        <Card className="p-4">
-          {renderTable("Inflow", inflowRows, setInflowRows, "inflow")}
-          {renderTable("Outflow", outflowRows, setOutflowRows, "outflow")}
+        {/* Charts — three columns */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          {/* Combined Cash Flow Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Monthly Inflow vs Outflow &amp; Net Cash Flow Trend</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {hasCashflowData ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={cashflowChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" fontSize={10} />
+                    <YAxis fontSize={10} tickFormatter={(v) => formatCurrency(v)} width={70} />
+                    <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
+                    <Legend
+                      wrapperStyle={{ fontSize: 10 }}
+                      payload={[
+                        { value: "Inflow", type: "square", color: "#10b981" },
+                        { value: "Outflow", type: "square", color: "#ef4444" },
+                        { value: "Net Cash Flow", type: "line", color: "#3b82f6" },
+                      ]}
+                    />
+                    <Bar dataKey="Inflow" fill="#10b981" opacity={0.85} />
+                    <Bar dataKey="Outflow" fill="#ef4444" opacity={0.85} />
+                    <Line type="monotone" dataKey="Net Cash Flow" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No cash flow data yet — add values above and save.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Net Cash Flow */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <tbody>
-                <tr className="bg-blue-50 font-bold text-blue-800">
-                  <td className="border p-2 min-w-[180px] sticky left-0 bg-blue-50">Net Cashflow</td>
-                  {netCashFlow.map((val, idx) => (
-                    <td
-                      key={idx}
-                      className={`border p-2 text-right min-w-[90px] ${val < 0 ? "text-red-600" : "text-green-700"}`}
+          {/* Annual Income Analysis */}
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="text-lg">Annual Income Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {incomeData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie
+                      data={incomeData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      dataKey="value"
+                      startAngle={90}
+                      endAngle={-270}
+                      label={({ percent }) => percent && percent > 0.04 ? `${(percent * 100).toFixed(0)}%` : ""}
+                      labelLine={false}
                     >
-                      {val.toLocaleString()}
-                    </td>
-                  ))}
-                  <td className={`border p-2 text-right min-w-[100px] ${netCashFlow.reduce((a, b) => a + b, 0) < 0 ? "text-red-600" : "text-green-700"}`}>
-                    {netCashFlow.reduce((a, b) => a + b, 0).toLocaleString()}
-                  </td>
-                  <td className="border p-1 w-10"></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                      {incomeData.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: any, name: any) => [Number(value).toLocaleString(), name]} />
+                    <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={8} formatter={pieLegendFormatter} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No income data yet — add inflow values above and save.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Annual Spending Analysis */}
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="text-lg">Annual Spending Analysis</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {spendingData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie
+                      data={spendingData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      dataKey="value"
+                      startAngle={90}
+                      endAngle={-270}
+                      label={({ percent }) => percent && percent > 0.04 ? `${(percent * 100).toFixed(0)}%` : ""}
+                      labelLine={false}
+                    >
+                      {spendingData.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: any, name: any) => [Number(value).toLocaleString(), name]} />
+                    <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={8} formatter={pieLegendFormatter} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No spending data yet — add outflow values above and save.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
       </main>
     </div>
   );

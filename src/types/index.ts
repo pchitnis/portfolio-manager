@@ -20,6 +20,8 @@ export interface DashboardData {
   totalLiabilities: number;
   quickLiquidAssets: number;
   lifeInsuranceCover: number;
+  lifeInsuranceByPerson: Record<string, number>;
+  loansByType: Record<string, number>;
   breakdown: {
     bankAccounts: number;
     termDeposits: number;

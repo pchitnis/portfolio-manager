@@ -41,7 +41,7 @@ export default function HomePage() {
             size="lg"
           >
             <Wallet className="h-10 w-10" />
-            Let me add my assets
+            Add Assets
           </Button>
           <Button
             onClick={() => router.push("/dashboard")}
@@ -50,7 +50,7 @@ export default function HomePage() {
             size="lg"
           >
             <LayoutDashboard className="h-10 w-10" />
-            I want to see dashboard
+            Show Dashboard
           </Button>
         </div>
       </main>

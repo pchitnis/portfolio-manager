@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
         },
       },
       update: {
+        categoryType: entry.categoryType || null,
         apr: entry.apr || 0,
         may: entry.may || 0,
         jun: entry.jun || 0,
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
         userId,
         type: entry.type,
         category: entry.category,
+        categoryType: entry.categoryType || null,
         fiscalYear,
         apr: entry.apr || 0,
         may: entry.may || 0,

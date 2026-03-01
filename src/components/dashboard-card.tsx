@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 interface DashboardCardProps {
   title: string;
+  subtitle?: string;
   amount: number;
   currency?: string;
   variant?: "default" | "positive" | "negative" | "info";
@@ -16,8 +17,9 @@ interface DashboardCardProps {
 
 export function DashboardCard({
   title,
+  subtitle,
   amount,
-  currency = "USD",
+  currency = "INR",
   variant = "default",
   expandable,
   expanded,
@@ -37,6 +39,7 @@ export function DashboardCard({
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-muted-foreground">{title}</p>
+            {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
             <p className="text-2xl font-bold mt-1">{formatCurrency(amount, currency)}</p>
           </div>
           {expandable && (
