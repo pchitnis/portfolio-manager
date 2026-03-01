@@ -68,6 +68,11 @@ export async function POST(
     cleaned[key] = value;
   }
 
-  const item = await model.create({ data: cleaned });
-  return NextResponse.json(item, { status: 201 });
+  try {
+    const item = await model.create({ data: cleaned });
+    return NextResponse.json(item, { status: 201 });
+  } catch (err: any) {
+    console.error("Prisma create error:", err);
+    return NextResponse.json({ error: err.message ?? "Create failed" }, { status: 500 });
+  }
 }

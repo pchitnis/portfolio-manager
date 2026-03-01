@@ -47,6 +47,7 @@ model BankAccount {
   bankName       String
   accountNumber  String?
   sortCode       String?
+  currency       String  @default("INR")
   currentBalance Float   @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -56,18 +57,23 @@ model BankAccount {
 }
 
 model TermDeposit {
-  id             String  @id @default(cuid())
-  userId         String
-  holderName     String
-  institution    String
-  investmentType String  @default("Fixed deposit")
-  customType     String?
-  accountNumber  String?
-  amount         Float   @default(0)
-  maturityDate   String?
-  currentValue   Float?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String  @id @default(cuid())
+  userId            String
+  holderName        String
+  institution       String
+  investmentType    String  @default("Fixed deposit")
+  customType        String?
+  accountNumber     String?
+  currency          String  @default("INR")
+  amount            Float   @default(0)
+  annualRate        Float?
+  interestFrequency String?
+  startDate         String?
+  maturityDate      String?
+  currentValue      Float?
+  maturityValue     Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
@@ -79,6 +85,7 @@ model Stock {
   name         String
   symbol       String
   purchaseDate String?
+  currency     String  @default("INR")
   buyPrice     Float
   quantity     Float
   currentValue Float?
@@ -95,6 +102,7 @@ model Metal {
   userId       String
   metalName    String
   quantity     Float
+  currency     String  @default("INR")
   buyingPrice  Float
   currentValue Float?
   createdAt    DateTime @default(now())
@@ -110,6 +118,7 @@ model RealEstate {
   identifier     String
   propertyType   String?
   address        String?
+  currency       String  @default("INR")
   purchasePrice  Float
   currentValue   Float?
   mortgageAmount Float   @default(0)
@@ -121,62 +130,76 @@ model RealEstate {
 }
 
 model Pension {
-  id           String  @id @default(cuid())
-  userId       String
-  holderName   String
-  providerName String
-  schemeName   String?
-  address      String?
+  id            String  @id @default(cuid())
+  userId        String
+  holderName    String
+  providerName  String
+  schemeName    String?
+  address       String?
   accountNumber String?
-  contactInfo  String?
-  currentValue Float
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  contactInfo   String?
+  currency      String  @default("INR")
+  currentValue  Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
 }
 
 model Loan {
-  id                String  @id @default(cuid())
-  userId            String
-  institution       String
-  loanType          String
-  loanAmount        Float
-  tenureYears       Float?
-  startDate         String?
-  monthlyPayment    Float?
+  id                 String  @id @default(cuid())
+  userId             String
+  holderName         String?
+  institution        String
+  loanType           String
+  currency           String  @default("INR")
+  loanAmount         Float
+  tenureYears        Float?
+  startDate          String?
+  monthlyPayment     Float?
   outstandingBalance Float
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
 }
 
 model Insurance {
-  id                String  @id @default(cuid())
-  userId            String
-  insuredName       String
-  provider          String?
-  policyType        String?
-  policyNumber      String?
-  sumAssured        Float?
-  currentPayoutValue Float  @default(0)
-  documentPath      String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 String  @id @default(cuid())
+  userId             String
+  insuredName        String
+  provider           String?
+  policyType         String?
+  policyNumber       String?
+  currency           String  @default("INR")
+  sumAssured         Float?
+  currentPayoutValue Float   @default(0)
+  documentPath       String?
+  premiumAmount      Float?
+  paymentFrequency   String?
+  paymentDay         String?
+  paymentMonth       String?
+  paymentQMonth1     String?
+  paymentQMonth2     String?
+  paymentQMonth3     String?
+  paymentQMonth4     String?
+  nextDueDate        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
 }
 
 model CashFlowEntry {
-  id         String @id @default(cuid())
-  userId     String
-  type       String // "inflow" or "outflow"
-  category   String
-  fiscalYear Int
+  id           String  @id @default(cuid())
+  userId       String
+  type         String // "inflow" or "outflow"
+  category     String
+  categoryType String? // inflow category: Salary, Rental income, etc.
+  fiscalYear   Int
   apr        Float  @default(0)
   may        Float  @default(0)
   jun        Float  @default(0)

@@ -9,6 +9,7 @@ import { AssetForm } from "@/components/asset-form";
 import { useToast } from "@/components/ui/toast";
 import { AssetTypeConfig } from "@/lib/asset-configs";
 import { formatCurrency } from "@/lib/utils";
+import { getCurrencySymbol } from "@/lib/currencies";
 import { Plus, Eye, Pencil, Trash2, ArrowLeft } from "lucide-react";
 
 interface AssetGridProps {
@@ -50,7 +51,10 @@ export function AssetGrid({ config }: AssetGridProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Failed to create");
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || "Failed to create");
+    }
     toast(`${config.label} added successfully`);
     fetchItems();
   };
@@ -61,7 +65,10 @@ export function AssetGrid({ config }: AssetGridProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (!res.ok) throw new Error("Failed to update");
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || "Failed to update");
+    }
     toast(`${config.label} updated successfully`);
     setEditItem(null);
     fetchItems();
@@ -78,11 +85,29 @@ export function AssetGrid({ config }: AssetGridProps) {
     }
   };
 
-  const formatValue = (key: string, value: any) => {
+  const formatValue = (key: string, value: any, currency?: string, noFormatCurrency?: boolean) => {
     if (value === null || value === undefined) return "—";
-    if (typeof value === "number") return formatCurrency(value);
+    if (typeof value === "number") {
+      if (noFormatCurrency) return value % 1 === 0 ? String(value) : value.toFixed(2);
+      const cur = currency || "INR";
+      try { return formatCurrency(value, cur); } catch { return `${getCurrencySymbol(cur)}${value.toFixed(2)}`; }
+    }
     return String(value);
   };
+
+  // Compute totals for each column (skip noFormatCurrency and noTotal columns)
+  const columnTotals = config.gridColumns.map((col) => {
+    if (col.noFormatCurrency || col.noTotal) return null;
+    let sum = 0;
+    let hasNumeric = false;
+    for (const item of items) {
+      const val = col.computed ? col.computed(item) : item[col.key];
+      if (typeof val === "number" && !isNaN(val)) { sum += val; hasNumeric = true; }
+    }
+    return hasNumeric ? sum : null;
+  });
+  const hasTotals = items.length > 0 && columnTotals.some((t) => t !== null);
+  const totalCurrency = items[0]?.currency || "INR";
 
   if (status === "loading" || loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
@@ -121,9 +146,9 @@ export function AssetGrid({ config }: AssetGridProps) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">#</th>
+                    <th className="text-center p-4 text-sm font-medium text-muted-foreground">#</th>
                     {config.gridColumns.map((col) => (
-                      <th key={col.key} className="text-left p-4 text-sm font-medium text-muted-foreground">
+                      <th key={col.key} className="text-center p-4 text-sm font-medium text-muted-foreground">
                         {col.label}
                       </th>
                     ))}
@@ -133,10 +158,10 @@ export function AssetGrid({ config }: AssetGridProps) {
                 <tbody>
                   {items.map((item, idx) => (
                     <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="p-4 text-sm">{idx + 1}</td>
+                      <td className="p-4 text-sm text-center">{idx + 1}</td>
                       {config.gridColumns.map((col) => (
-                        <td key={col.key} className="p-4 text-sm">
-                          {formatValue(col.key, item[col.key])}
+                        <td key={col.key} className="p-4 text-sm text-center">
+                          {formatValue(col.key, col.computed ? col.computed(item) : item[col.key], item.currency, col.noFormatCurrency)}
                         </td>
                       ))}
                       <td className="p-4 text-right">
@@ -169,6 +194,17 @@ export function AssetGrid({ config }: AssetGridProps) {
                       </td>
                     </tr>
                   ))}
+                  {hasTotals && (
+                    <tr className="border-t-2 border-border bg-muted/60 font-semibold">
+                      <td className="p-4 text-sm text-center text-muted-foreground">Total</td>
+                      {columnTotals.map((total, idx) => (
+                        <td key={idx} className="p-4 text-sm text-center">
+                          {total !== null ? formatValue("", total, totalCurrency) : ""}
+                        </td>
+                      ))}
+                      <td />
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -192,14 +228,37 @@ export function AssetGrid({ config }: AssetGridProps) {
             <div className="relative z-50 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-lg bg-background p-6 shadow-lg">
               <h2 className="text-lg font-semibold mb-4">{config.label} Details</h2>
               <div className="space-y-3">
-                {config.fields.map((field) => (
-                  <div key={field.name} className="flex justify-between border-b pb-2">
-                    <span className="text-sm text-muted-foreground">{field.label}</span>
-                    <span className="text-sm font-medium">
-                      {formatValue(field.name, viewItem[field.name])}
-                    </span>
-                  </div>
-                ))}
+                {config.fields.map((field) => {
+                  if (field.type === "file") {
+                    let paths: string[] = [];
+                    try { paths = JSON.parse(viewItem[field.name] || "[]"); } catch { if (viewItem[field.name]) paths = [viewItem[field.name]]; }
+                    return (
+                      <div key={field.name} className="border-b pb-2">
+                        <span className="text-sm text-muted-foreground">{field.label}</span>
+                        {paths.length === 0 ? (
+                          <p className="text-sm font-medium mt-1">—</p>
+                        ) : (
+                          <div className="mt-1 space-y-1">
+                            {paths.map((p, i) => (
+                              <a key={i} href={p} target="_blank" rel="noopener noreferrer"
+                                className="block text-sm text-blue-600 hover:underline truncate">
+                                {p.split("/").pop()?.replace(/^\d+-/, "") ?? p}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={field.name} className="flex justify-between border-b pb-2">
+                      <span className="text-sm text-muted-foreground">{field.label}</span>
+                      <span className="text-sm font-medium">
+                        {formatValue(field.name, viewItem[field.name], viewItem.currency)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
               <div className="mt-6 flex justify-end">
                 <Button variant="outline" onClick={() => setViewItem(null)}>Close</Button>
