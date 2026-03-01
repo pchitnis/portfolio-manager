@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
 import { hash } from "bcryptjs";
 import prisma from "@/lib/prisma";
+import { registerLimiter, getClientIp, rateLimitResponse } from "@/lib/rate-limiter";
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const { allowed, retryAfterMs } = registerLimiter.check(ip);
+  if (!allowed) {
+    return rateLimitResponse(retryAfterMs);
+  }
+
   try {
     const body = await request.json();
     const { email, mobile, password, country, currency } = body;

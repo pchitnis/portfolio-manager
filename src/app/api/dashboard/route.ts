@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     ...loans.map((a) => a.currency || "INR"),
     ...insurances.map((a) => a.currency || "INR"),
   ];
-  const uniqueCurrencies = [...new Set(allCurrencies)].filter((c) => c !== displayCurrency);
+  const uniqueCurrencies = Array.from(new Set(allCurrencies)).filter((c) => c !== displayCurrency);
 
   // Fetch all needed forex rates in parallel
   const rateEntries = await Promise.all(
