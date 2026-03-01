@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma migrate dev --name add_cashflow_category_type)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(cmd /c \"taskkill /F /IM node.exe\")",
+      "Bash(cmd /c \"rmdir /s /q C:\\\\Users\\\\chitn\\\\hackathon\\\\portfolio-manager\\\\.next\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /F /PID 37672 /PID 40256 /PID 47028 /PID 46496)"
+    ]
+  }
+}

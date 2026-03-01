@@ -4,12 +4,13 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { Select } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, Save, Trash2, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
+import { PRIORITY_CURRENCIES, OTHER_CURRENCIES } from "@/lib/currencies";
+import { Plus, Save, Trash2, ChevronDown, ChevronUp, ArrowLeft, Info } from "lucide-react";
 import {
   PieChart, Pie, Cell, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, Line, ComposedChart,
@@ -83,6 +84,7 @@ interface CashFlowRow {
   type: "inflow" | "outflow";
   category: string;
   categoryType?: string;
+  copyForAll?: boolean;
   [key: string]: any;
 }
 
@@ -91,11 +93,21 @@ export default function CashFlowPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [fiscalYear, setFiscalYear] = useState(new Date().getFullYear());
+  const [currency, setCurrency] = useState("INR");
+
+  // Load currency preference from DB on mount
+  useEffect(() => {
+    fetch("/api/user/currency")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.currency) setCurrency(data.currency); })
+      .catch(() => {});
+  }, []);
   const [inflowRows, setInflowRows] = useState<CashFlowRow[]>([]);
   const [outflowRows, setOutflowRows] = useState<CashFlowRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
+  const [cellErrors, setCellErrors] = useState<Record<string, string>>({});
 
   const initializeDefaults = useCallback(() => {
     const makeRow = (type: "inflow" | "outflow", category: string): CashFlowRow => {
@@ -117,30 +129,8 @@ export default function CashFlowPage() {
         } else {
           const inflows = entries.filter((e: any) => e.type === "inflow");
           const outflows = entries.filter((e: any) => e.type === "outflow");
-
-          const inflowCats = new Set(inflows.map((e: any) => e.category));
-          const outflowCats = new Set(outflows.map((e: any) => e.category));
-
-          const allInflows = [...inflows];
-          defaultInflowCategories.forEach((c) => {
-            if (!inflowCats.has(c)) {
-              const row: any = { type: "inflow", category: c };
-              months.forEach((m) => (row[m] = 0));
-              allInflows.push(row);
-            }
-          });
-
-          const allOutflows = [...outflows];
-          defaultOutflowCategories.forEach((c) => {
-            if (!outflowCats.has(c)) {
-              const row: any = { type: "outflow", category: c };
-              months.forEach((m) => (row[m] = 0));
-              allOutflows.push(row);
-            }
-          });
-
-          setInflowRows(allInflows);
-          setOutflowRows(allOutflows);
+          setInflowRows(inflows);
+          setOutflowRows(outflows);
         }
       }
     } catch {
@@ -160,10 +150,30 @@ export default function CashFlowPage() {
     setRows: React.Dispatch<React.SetStateAction<CashFlowRow[]>>,
     idx: number,
     month: string,
-    value: string
+    value: string,
+    isBadInput?: boolean
   ) => {
+    const cellKey = `${rows[idx]?.type ?? "row"}-${idx}-${month}`;
+    if (isBadInput) {
+      setCellErrors((prev) => ({ ...prev, [cellKey]: "Please enter positive numbers only. Alphabets are not allowed." }));
+      toast("Please enter positive numbers only. Alphabets are not allowed.", "error");
+      return;
+    }
+    const raw = parseFloat(value);
+    let num = isNaN(raw) ? 0 : raw;
+    if (!isNaN(raw) && raw < 0) {
+      setCellErrors((prev) => ({ ...prev, [cellKey]: "Please enter a positive number." }));
+      toast("Please enter a positive number.", "error");
+      num = 0;
+    } else if (value.includes(".") && (value.split(".")[1]?.length ?? 0) > 2) {
+      setCellErrors((prev) => ({ ...prev, [cellKey]: "Maximum 2 decimal places allowed." }));
+      toast("Maximum 2 decimal places allowed.", "error");
+      num = Math.round(num * 100) / 100;
+    } else {
+      setCellErrors((prev) => { const e = { ...prev }; delete e[cellKey]; return e; });
+    }
     const updated = [...rows];
-    updated[idx] = { ...updated[idx], [month]: parseFloat(value) || 0 };
+    updated[idx] = { ...updated[idx], [month]: num };
     setRows(updated);
   };
 
@@ -183,6 +193,30 @@ export default function CashFlowPage() {
     } else {
       setOutflowRows((prev) => prev.filter((_, i) => i !== idx));
     }
+  };
+
+  const handleCopyForAll = (
+    rows: CashFlowRow[],
+    setRows: React.Dispatch<React.SetStateAction<CashFlowRow[]>>,
+    idx: number,
+    checked: boolean
+  ) => {
+    if (!checked) return;
+    const updated = [...rows];
+    const row = { ...updated[idx] };
+    // Find first non-zero value in any month and copy to all months
+    const firstVal = months.reduce<number | null>((found, m) => {
+      if (found !== null) return found;
+      const v = parseFloat(row[m]);
+      return !isNaN(v) && v > 0 ? v : null;
+    }, null);
+    if (firstVal !== null) {
+      months.forEach((m) => { row[m] = firstVal; });
+    }
+    // Auto-uncheck so user can freely overwrite individual months
+    row.copyForAll = false;
+    updated[idx] = row;
+    setRows(updated);
   };
 
   const renameCategory = (
@@ -205,6 +239,10 @@ export default function CashFlowPage() {
   };
 
   const handleSave = async () => {
+    if (Object.keys(cellErrors).length > 0) {
+      toast("Please fix all validation errors before saving.", "error");
+      return;
+    }
     setSaving(true);
     try {
       const allEntries = [...inflowRows, ...outflowRows].map((row) => ({
@@ -234,7 +272,8 @@ export default function CashFlowPage() {
       if (res.ok) {
         toast("Cash flow saved successfully");
       } else {
-        toast("Failed to save", "error");
+        const body = await res.json().catch(() => null);
+        toast(body?.error || "Failed to save", "error");
       }
     } catch {
       toast("Failed to save", "error");
@@ -270,6 +309,7 @@ export default function CashFlowPage() {
           <colgroup>
             <col className="w-[150px]" />
             {showCategory && <col className="w-[160px]" />}
+            <col className="w-[70px]" />
             {months.map((m) => <col key={m} className="w-[72px]" />)}
             <col className="w-[80px]" />
             <col className="w-[36px]" />
@@ -278,6 +318,7 @@ export default function CashFlowPage() {
             <tr className="bg-muted/50">
               <th className="border p-2 text-left sticky left-0 bg-muted/50">Particulars</th>
               {showCategory && <th className="border p-2 text-left">Category</th>}
+              <th className="border p-1 text-center text-xs leading-tight" title="Check to copy the first non-zero value to all months. While checked, editing any cell updates all months.">Copy to<br/>all mths</th>
               {monthLabels.map((m) => (
                 <th key={m} className="border p-2 text-center">{m}</th>
               ))}
@@ -293,6 +334,7 @@ export default function CashFlowPage() {
                     type="text"
                     value={row.category}
                     onChange={(e) => renameCategory(rows, setRows, idx, e.target.value)}
+                    maxLength={256}
                     className="w-full px-1 py-0.5 text-sm border-0 focus:outline-none focus:ring-1 focus:ring-primary rounded"
                   />
                 </td>
@@ -314,17 +356,33 @@ export default function CashFlowPage() {
                     </select>
                   </td>
                 )}
-                {months.map((m) => (
-                  <td key={m} className="border p-1">
-                    <input
-                      type="number"
-                      value={row[m] || ""}
-                      onChange={(e) => updateCell(rows, setRows, idx, m, e.target.value)}
-                      className="w-full px-1 py-0.5 text-sm text-right border-0 focus:outline-none focus:ring-1 focus:ring-primary rounded"
-                      placeholder="0"
-                    />
-                  </td>
-                ))}
+                <td className="border p-1 text-center">
+                  <input
+                    type="checkbox"
+                    checked={row.copyForAll || false}
+                    onChange={(e) => handleCopyForAll(rows, setRows, idx, e.target.checked)}
+                    className="cursor-pointer"
+                    title="Copy this row's value to all months"
+                  />
+                </td>
+                {months.map((m) => {
+                  const cellKey = `${row.type}-${idx}-${m}`;
+                  const cellErr = cellErrors[cellKey];
+                  return (
+                    <td key={m} className="border p-1">
+                      <input
+                        type="number"
+                        value={row[m] || ""}
+                        onChange={(e) => updateCell(rows, setRows, idx, m, e.target.value, (e.target as HTMLInputElement).validity?.badInput)}
+                        min="0"
+                        step="0.01"
+                        title={cellErr}
+                        className={`w-full px-1 py-0.5 text-sm text-right border-0 focus:outline-none focus:ring-1 rounded ${cellErr ? "ring-1 ring-red-500 bg-red-50" : "focus:ring-primary"}`}
+                        placeholder="0"
+                      />
+                    </td>
+                  );
+                })}
                 <td className="border p-2 text-right font-medium bg-muted/30 text-xs">
                   {getRowTotal(row).toLocaleString()}
                 </td>
@@ -342,6 +400,7 @@ export default function CashFlowPage() {
             <tr className="bg-muted/50 font-bold">
               <td className="border p-2 sticky left-0 bg-muted/50">Total {title}</td>
               {showCategory && <td className="border p-2"></td>}
+              <td className="border p-2"></td>
               {months.map((m) => (
                 <td key={m} className="border p-2 text-center">
                   {getColumnTotal(rows, m).toLocaleString()}
@@ -443,6 +502,36 @@ export default function CashFlowPage() {
                   <option key={y} value={y}>FY {y}</option>
                 ))}
               </Select>
+              <div className="relative group">
+                <Select
+                  value={currency}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCurrency(val);
+                    fetch("/api/user/currency", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ currency: val }),
+                    }).catch(() => {});
+                  }}
+                  className="w-36"
+                >
+                  <optgroup label="Popular">
+                    {PRIORITY_CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code}>{c.code} – {c.name}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Other Currencies">
+                    {OTHER_CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code}>{c.code} – {c.name}</option>
+                    ))}
+                  </optgroup>
+                </Select>
+                <div className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 hidden group-hover:flex items-center gap-1 bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50 shadow-lg">
+                  <Info className="h-3 w-3 shrink-0" />
+                  Only one currency is allowed on this screen
+                </div>
+              </div>
               <Button onClick={handleSave} disabled={saving}>
                 <Save className="h-4 w-4 mr-2" />
                 {saving ? "Saving..." : "Save"}
@@ -466,6 +555,7 @@ export default function CashFlowPage() {
                   <colgroup>
                     <col className="w-[150px]" />
                     <col className="w-[160px]" />
+                    <col className="w-[70px]" />
                     {months.map((m) => <col key={m} className="w-[72px]" />)}
                     <col className="w-[80px]" />
                     <col className="w-[36px]" />
@@ -474,6 +564,7 @@ export default function CashFlowPage() {
                     <tr className="bg-blue-50 font-bold text-blue-800">
                       <td className="border p-2 sticky left-0 bg-blue-50">Net Cashflow</td>
                       <td className="border p-2"></td>
+                      <td className="border p-1"></td>
                       {netCashFlow.map((val, idx) => (
                         <td
                           key={idx}
@@ -507,15 +598,46 @@ export default function CashFlowPage() {
                   <ComposedChart data={cashflowChartData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" fontSize={10} />
-                    <YAxis fontSize={10} tickFormatter={(v) => formatCurrency(v)} width={70} />
-                    <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
+                    <YAxis fontSize={10} tickFormatter={(v) => formatCurrency(v, currency)} width={70} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const order = ["Inflow", "Outflow", "Net Cash Flow"];
+                        const sorted = order
+                          .map((key) => payload.find((p: any) => p.dataKey === key))
+                          .filter(Boolean) as any[];
+                        return (
+                          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 12px", fontSize: 11 }}>
+                            <p style={{ fontWeight: 600, marginBottom: 4 }}>{label}</p>
+                            {sorted.map((p) => (
+                              <p key={p.dataKey} style={{ color: p.color, margin: "2px 0" }}>
+                                {p.name}: {formatCurrency(Number(p.value), currency)}
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      }}
+                    />
                     <Legend
                       wrapperStyle={{ fontSize: 10 }}
-                      payload={[
-                        { value: "Inflow", type: "square", color: "#10b981" },
-                        { value: "Outflow", type: "square", color: "#ef4444" },
-                        { value: "Net Cash Flow", type: "line", color: "#3b82f6" },
-                      ]}
+                      content={() => (
+                        <div style={{ display: "flex", justifyContent: "center", gap: 16, fontSize: 10 }}>
+                          {[
+                            { label: "Inflow", color: "#10b981", type: "square" },
+                            { label: "Outflow", color: "#ef4444", type: "square" },
+                            { label: "Net Cash Flow", color: "#3b82f6", type: "line" },
+                          ].map(({ label, color, type }) => (
+                            <span key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {type === "line" ? (
+                                <svg width="16" height="10"><line x1="0" y1="5" x2="16" y2="5" stroke={color} strokeWidth="2.5" /></svg>
+                              ) : (
+                                <span style={{ display: "inline-block", width: 10, height: 10, backgroundColor: color, borderRadius: 2 }} />
+                              )}
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     />
                     <Bar dataKey="Inflow" fill="#10b981" opacity={0.85} />
                     <Bar dataKey="Outflow" fill="#ef4444" opacity={0.85} />
@@ -555,7 +677,23 @@ export default function CashFlowPage() {
                       ))}
                     </Pie>
                     <Tooltip formatter={(value: any, name: any) => [Number(value).toLocaleString(), name]} />
-                    <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={8} formatter={pieLegendFormatter} />
+                    <Legend
+                      layout="vertical" align="right" verticalAlign="middle"
+                      content={({ payload }) => {
+                        if (!payload?.length) return null;
+                        const sorted = [...payload].sort((a: any, b: any) => (b.payload?.percent ?? 0) - (a.payload?.percent ?? 0));
+                        return (
+                          <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 10 }}>
+                            {sorted.map((entry: any) => (
+                              <li key={entry.value} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", backgroundColor: entry.color, flexShrink: 0 }} />
+                                <span>{entry.value}{entry.payload?.percent != null ? ` ${(entry.payload.percent * 100).toFixed(0)}%` : ""}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        );
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
@@ -591,7 +729,23 @@ export default function CashFlowPage() {
                       ))}
                     </Pie>
                     <Tooltip formatter={(value: any, name: any) => [Number(value).toLocaleString(), name]} />
-                    <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={8} formatter={pieLegendFormatter} />
+                    <Legend
+                      layout="vertical" align="right" verticalAlign="middle"
+                      content={({ payload }) => {
+                        if (!payload?.length) return null;
+                        const sorted = [...payload].sort((a: any, b: any) => (b.payload?.percent ?? 0) - (a.payload?.percent ?? 0));
+                        return (
+                          <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 10 }}>
+                            {sorted.map((entry: any) => (
+                              <li key={entry.value} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", backgroundColor: entry.color, flexShrink: 0 }} />
+                                <span>{entry.value}{entry.payload?.percent != null ? ` ${(entry.payload.percent * 100).toFixed(0)}%` : ""}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        );
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
